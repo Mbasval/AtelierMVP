@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>MVP: Listado + Mapa de Vendedores</title>
+  <title>MVP: Listado + Mapa con Leaflet (OSM)</title>
 
   <!-- 1) Estilos básicos -->
   <style>
@@ -40,17 +40,27 @@
     }
   </style>
 
-  <!-- 2) Cargamos la API de Google Maps (reemplaza TU_API_KEY por tu clave real) -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=TU_API_KEY&callback=initMap" async defer></script>
+  <!-- 2) Carga Leaflet CSS y JS desde CDN -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-o1HMUuF46bXgX+NbQPqQhK9SmXTUynw+QvM4fCF7JQA="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-pxLu1/J+6XBA/z6ROEfCytkXGZJEwFua4ApKx4mdn6E="
+    crossorigin=""
+  ></script>
 
-  <!-- 3) Cargamos PapaParse para parsear CSV -->
+  <!-- 3) Carga PapaParse para parsear CSV -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
 
-  <h1>Vendedores – MVP</h1>
+  <h1>Vendedores – MVP con Leaflet (OSM)</h1>
 
-  <!-- 4) Contenedor para el Mapa -->
+  <!-- 4) Contenedor para el mapa -->
   <div id="map"></div>
 
   <!-- 5) Tabla de datos -->
@@ -64,117 +74,118 @@
       </tr>
     </thead>
     <tbody>
-      <!-- Aquí inyectaremos filas -->
+      <!-- Aquí inyectamos las filas -->
     </tbody>
   </table>
 
-  <!-- 6) Script principal: carga el CSV, llena tabla y coloca marcadores -->
+  <!-- 6) Script principal -->
   <script>
-    // 6.1 Reemplaza con tu URL CSV real (de "Publicar en la web")
-    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1g0UNi055ZvOL-_wi7MJUU6RMzzhkEz9ClclHVaZGEky-sf7x7fa7vGUzAScKgy3qhbBXM2bOpMBi/pub?output=csv";
+    // 6.1: Reemplaza con tu URL CSV pública de Google Sheet
+    const CSV_URL =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1g0UNi055ZvOL-_wi7MJUU6RMzzhkEz9ClclHVaZGEky-sf7x7fa7vGUzAScKgy3qhbBXM2bOpMBi/pub?output=csv";
 
-    // 6.2 Variables globales para usar en initMap
-    let map;            // el mapa de Google
-    let geocoder;       // el servicio de geocodificación
+    // 6.2: Inicializa Leaflet
+    const map = L.map("map").setView([23.6345, -102.5528], 4);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
+    }).addTo(map);
 
-    // 6.3 Función que inicializa el mapa (se invoca cuando carga la API de Google Maps)
-    function initMap() {
-      // Centrar el mapa en coordenadas generales (México / EE. UU.)
-      map = new google.maps.Map(document.getElementById("map"), {
-        center: { lat: 23.6345, lng: -102.5528 },
-        zoom: 4
-      });
-      geocoder = new google.maps.Geocoder();
-
-      // Después de inicializar el mapa, cargamos el CSV
-      cargarCSV();
-    }
-
-    // 6.4 Función para cargar y procesar el CSV con PapaParse
-    function cargarCSV() {
-      Papa.parse(CSV_URL, {
-        download: true,
-        header: true,
-        skipEmptyLines: true,
-        complete: function(results) {
-          const data = results.data; // Array de objetos { Nombre: "...", Servicios: "...", "Teléfono": "...", Dirección: "..." }
-          const tbody = document.querySelector("#lista-proveedores tbody");
-
-          if (!data || data.length === 0) {
-            const tr = document.createElement("tr");
-            tr.innerHTML = '<td colspan="4" style="text-align:center;">No se encontraron vendedores.</td>';
-            tbody.appendChild(tr);
-            return;
+    // 6.3: Geocodificar dirección con Nominatim (OpenStreetMap)
+    function geocodeOSM(address, callback) {
+      // URL de Nominatim para geocoding
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+        address
+      )}`;
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          if (data && data.length > 0) {
+            const lat = parseFloat(data[0].lat);
+            const lon = parseFloat(data[0].lon);
+            callback(null, [lat, lon]);
+          } else {
+            callback("No se encontró ubicación", null);
           }
+        })
+        .catch(err => callback(err, null));
+    }
 
-          // Array para guardar todas las direcciones y luego ajustar el zoom/bounds
-          const addressesParaBounds = [];
+    // 6.4: Cargar y procesar el CSV con PapaParse
+    Papa.parse(CSV_URL, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: function (results) {
+        const data = results.data; // Array de { Nombre, Servicios, "Teléfono", Dirección }
+        const tbody = document.querySelector("#lista-proveedores tbody");
 
-          // Iterar cada fila
-          data.forEach(row => {
-            const nombre = row["Nombre"] || "";
-            const servicios = row["Servicios"] || "";
-            const telefono = row["Teléfono"] || "";
-            const direccion = row["Dirección"] || "";
-
-            // --- 6.4.1: Agregar fila a la tabla HTML ---
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-              <td>${nombre}</td>
-              <td>${servicios}</td>
-              <td>${telefono}</td>
-              <td>${direccion}</td>
-            `;
-            tbody.appendChild(tr);
-
-            // --- 6.4.2: Geocodificar dirección y colocar marcador ---
-            if (direccion.trim().length > 0) {
-              geocoder.geocode({ address: direccion }, function(resultsGeo, status) {
-                if (status === "OK" && resultsGeo[0]) {
-                  const location = resultsGeo[0].geometry.location;
-                  // Crear marcador
-                  const marker = new google.maps.Marker({
-                    map: map,
-                    position: location,
-                    title: nombre
-                  });
-                  // Popup (tooltip) al hacer clic
-                  const infoWindow = new google.maps.InfoWindow({
-                    content: `<strong>${nombre}</strong><br>${direccion}<br>📞 ${telefono}`
-                  });
-                  marker.addListener("click", function() {
-                    infoWindow.open(map, marker);
-                  });
-                  // Guardamos latLng para ajustar bounds luego
-                  addressesParaBounds.push(location);
-                  // Una vez todos los geocodings se hayan procesado (aprox.), ajustamos la vista
-                  if (addressesParaBounds.length === data.length) {
-                    ajustarBounds(addressesParaBounds);
-                  }
-                } else {
-                  console.warn("Geocoding falló para:", direccion, "Status:", status);
-                }
-              });
-            }
-          });
-        },
-        error: function(err) {
-          console.error("Error al cargar CSV:", err);
-          const tbody = document.querySelector("#lista-proveedores tbody");
+        if (!data || data.length === 0) {
           const tr = document.createElement("tr");
-          tr.innerHTML = '<td colspan="4" style="text-align:center;">Error al cargar datos.</td>';
+          tr.innerHTML =
+            '<td colspan="4" style="text-align:center;">No se encontraron vendedores.</td>';
           tbody.appendChild(tr);
+          return;
         }
-      });
-    }
 
-    // 6.5 Ajustar los límites del mapa según los marcadores
-    function ajustarBounds(locationsArray) {
-      if (!locationsArray || locationsArray.length === 0) return;
-      const bounds = new google.maps.LatLngBounds();
-      locationsArray.forEach(loc => bounds.extend(loc));
-      map.fitBounds(bounds);
-    }
+        // Array para guardar coordenadas y ajustar bounds luego
+        let marcadoresCount = 0;
+        const ubicaciones = [];
+
+        data.forEach((row, index) => {
+          const nombre = row["Nombre"] || "";
+          const servicios = row["Servicios"] || "";
+          const telefono = row["Teléfono"] || "";
+          const direccion = row["Dirección"] || "";
+
+          // 6.4.1: Agregar fila a la tabla
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${nombre}</td>
+            <td>${servicios}</td>
+            <td>${telefono}</td>
+            <td>${direccion}</td>
+          `;
+          tbody.appendChild(tr);
+
+          // 6.4.2: Geocodificar con Nominatim y crear marcador
+          if (direccion.trim().length > 0) {
+            geocodeOSM(direccion, (err, latlon) => {
+              marcadoresCount++;
+              if (!err && latlon) {
+                const [lat, lon] = latlon;
+                const marker = L.marker([lat, lon]).addTo(map);
+                marker.bindPopup(`<strong>${nombre}</strong><br>${direccion}<br>📞 ${telefono}`);
+                ubicaciones.push([lat, lon]);
+              } else {
+                console.warn(`No se pudo geocodificar “${direccion}”:`, err);
+              }
+              // Una vez que intentamos geocodificar todas las filas, ajustamos bounds
+              if (marcadoresCount === data.length) {
+                if (ubicaciones.length > 0) {
+                  const bounds = L.latLngBounds(ubicaciones);
+                  map.fitBounds(bounds.pad(0.2));
+                }
+              }
+            });
+          } else {
+            // Si no hay dirección, contamos como “procesado” para el ajuste de bounds
+            marcadoresCount++;
+            if (marcadoresCount === data.length && ubicaciones.length > 0) {
+              const bounds = L.latLngBounds(ubicaciones);
+              map.fitBounds(bounds.pad(0.2));
+            }
+          }
+        });
+      },
+      error: function (err) {
+        console.error("Error al cargar CSV:", err);
+        const tbody = document.querySelector("#lista-proveedores tbody");
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          '<td colspan="4" style="text-align:center;">Error al cargar datos.</td>';
+        tbody.appendChild(tr);
+      },
+    });
   </script>
 </body>
 </html>
