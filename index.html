@@ -68,7 +68,7 @@
         header: true,
         skipEmptyLines: true,
         complete: function (results) {
-          const data = results.data; // Array de objetos: { Nombre: "...", Servicios: "...", "Número de teléfono": "..." }
+          const data = results.data; // Array de objetos: { Nombre: "...", Servicios: "...", "Teléfono": "..." }
           const tbody = document.querySelector("#lista-proveedores tbody");
           
           // Si no hay datos, mostramos un mensaje
