@@ -18,39 +18,35 @@
     #map {
       width: 100%;
       height: 400px;
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
+      border: 1px solid #ccc;
     }
-    #lista-proveedores {
+    table {
+      width: 100%;
       max-width: 600px;
       margin: 0 auto;
       border-collapse: collapse;
-      width: 100%;
     }
-    #lista-proveedores th,
-    #lista-proveedores td {
+    th, td {
       border: 1px solid #ccc;
       padding: 0.5rem;
       text-align: left;
     }
-    #lista-proveedores th {
+    th {
       background: #f7f7f7;
     }
-    #lista-proveedores tr:nth-child(even) {
+    tr:nth-child(even) {
       background: #f9f9f9;
     }
   </style>
 
-  <!-- 2) Carga Leaflet CSS y JS desde CDN -->
+  <!-- 2) Carga Leaflet CSS y JS desde CDN (sin integrity ni crossorigin) -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-o1HMUuF46bXgX+NbQPqQhK9SmXTUynw+QvM4fCF7JQA="
-    crossorigin=""
   />
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-pxLu1/J+6XBA/z6ROEfCytkXGZJEwFua4ApKx4mdn6E="
-    crossorigin=""
   ></script>
 
   <!-- 3) Carga PapaParse para parsear CSV -->
@@ -88,7 +84,7 @@
     // 6.2: Inicializa Leaflet
     const map = L.map("map").setView([23.6345, -102.5528], 4);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
+      attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
     }).addTo(map);
 
     // 6.3: Cargar el CSV y procesar filas
@@ -123,12 +119,12 @@
             <td>${nombre}</td>
             <td>${servicios}</td>
             <td>${telefono}</td>
-            <td>${isNaN(lat) ? "" : lat.toFixed(6)}</td>
-            <td>${isNaN(lon) ? "" : lon.toFixed(6)}</td>
+            <td>${isNaN(lat) ? "" : lat.toFixed(5)}</td>
+            <td>${isNaN(lon) ? "" : lon.toFixed(5)}</td>
           `;
           tbody.appendChild(tr);
 
-          // 6.3.2: Solo si lat/lon son números válidos, colocamos marcador
+          // 6.3.2: Solo si lat y lon son números válidos, colocamos marcador
           if (!isNaN(lat) && !isNaN(lon)) {
             const marker = L.marker([lat, lon]).addTo(map);
             marker.bindPopup(
@@ -151,7 +147,7 @@
         tr.innerHTML =
           '<td colspan="5" style="text-align:center;">Error al cargar datos.</td>';
         tbody.appendChild(tr);
-      },
+      }
     });
   </script>
 </body>
