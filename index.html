@@ -2,12 +2,9 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>MVP: Listado de Proveedores</title>
+  <title>MVP: Listado + Mapa de Vendedores</title>
 
-  <!-- 1) PapaParse load CSV -->
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
-  <!-- 2) Estilos -->
+  <!-- 1) Estilos básicos -->
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -17,6 +14,11 @@
     h1 {
       text-align: center;
       margin-bottom: 1rem;
+    }
+    #map {
+      width: 100%;
+      height: 400px;
+      margin-bottom: 2rem;
     }
     #lista-proveedores {
       max-width: 600px;
@@ -33,76 +35,146 @@
     #lista-proveedores th {
       background: #f7f7f7;
     }
-    /* Fila alterna */
     #lista-proveedores tr:nth-child(even) {
       background: #f9f9f9;
     }
   </style>
+
+  <!-- 2) Cargamos la API de Google Maps (reemplaza TU_API_KEY por tu clave real) -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=TU_API_KEY&callback=initMap" async defer></script>
+
+  <!-- 3) Cargamos PapaParse para parsear CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
 
-  <h1>Listado de Proveedores de Atelier (MVP)</h1>
+  <h1>Vendedores – MVP</h1>
+
+  <!-- 4) Contenedor para el Mapa -->
+  <div id="map"></div>
+
+  <!-- 5) Tabla de datos -->
   <table id="lista-proveedores">
     <thead>
       <tr>
         <th>Nombre</th>
         <th>Servicios</th>
         <th>Teléfono</th>
+        <th>Dirección</th>
       </tr>
     </thead>
     <tbody>
-      <!-- Aquí se inyectarán las filas desde JavaScript -->
+      <!-- Aquí inyectaremos filas -->
     </tbody>
   </table>
 
-  <!-- 3) Script para leer el CSV y poblar la tabla -->
+  <!-- 6) Script principal: carga el CSV, llena tabla y coloca marcadores -->
   <script>
-    // ─── 3.1: Reemplaza con la URL CSV que obtuviste en "Publicar en la web" ───
-    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1g0UNi055ZvOL-_wi7MJUU6RMzzhkEz9ClclHVaZGEky-sf7x7fa7vGUzAScKgy3qhbBXM2bOpMBi/pub?gid=0&single=true&output=csv";
+    // 6.1 Reemplaza con tu URL CSV real (de "Publicar en la web")
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/TU_SHEET_ID/gviz/tq?tqx=out:csv&sheet=Hoja1";
 
-    // Función que se ejecuta al cargar la página
-    document.addEventListener("DOMContentLoaded", function () {
-      // Usamos PapaParse para descargar y parsear el CSV
+    // 6.2 Variables globales para usar en initMap
+    let map;            // el mapa de Google
+    let geocoder;       // el servicio de geocodificación
+
+    // 6.3 Función que inicializa el mapa (se invoca cuando carga la API de Google Maps)
+    function initMap() {
+      // Centrar el mapa en coordenadas generales (México / EE. UU.)
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 23.6345, lng: -102.5528 },
+        zoom: 4
+      });
+      geocoder = new google.maps.Geocoder();
+
+      // Después de inicializar el mapa, cargamos el CSV
+      cargarCSV();
+    }
+
+    // 6.4 Función para cargar y procesar el CSV con PapaParse
+    function cargarCSV() {
       Papa.parse(CSV_URL, {
         download: true,
         header: true,
         skipEmptyLines: true,
-        complete: function (results) {
-          const data = results.data; // Array de objetos: { Nombre: "...", Servicios: "...", "Teléfono": "..." }
+        complete: function(results) {
+          const data = results.data; // Array de objetos { Nombre: "...", Servicios: "...", "Teléfono": "...", Dirección: "..." }
           const tbody = document.querySelector("#lista-proveedores tbody");
-          
-          // Si no hay datos, mostramos un mensaje
+
           if (!data || data.length === 0) {
             const tr = document.createElement("tr");
-            tr.innerHTML = '<td colspan="3" style="text-align:center;">No se encontraron proveedores.</td>';
+            tr.innerHTML = '<td colspan="4" style="text-align:center;">No se encontraron vendedores.</td>';
             tbody.appendChild(tr);
             return;
           }
 
-          // Iteramos cada fila y generamos un <tr> con <td> para cada columna
+          // Array para guardar todas las direcciones y luego ajustar el zoom/bounds
+          const addressesParaBounds = [];
+
+          // Iterar cada fila
           data.forEach(row => {
             const nombre = row["Nombre"] || "";
             const servicios = row["Servicios"] || "";
             const telefono = row["Teléfono"] || "";
+            const direccion = row["Dirección"] || "";
 
+            // --- 6.4.1: Agregar fila a la tabla HTML ---
             const tr = document.createElement("tr");
             tr.innerHTML = `
               <td>${nombre}</td>
               <td>${servicios}</td>
               <td>${telefono}</td>
+              <td>${direccion}</td>
             `;
             tbody.appendChild(tr);
+
+            // --- 6.4.2: Geocodificar dirección y colocar marcador ---
+            if (direccion.trim().length > 0) {
+              geocoder.geocode({ address: direccion }, function(resultsGeo, status) {
+                if (status === "OK" && resultsGeo[0]) {
+                  const location = resultsGeo[0].geometry.location;
+                  // Crear marcador
+                  const marker = new google.maps.Marker({
+                    map: map,
+                    position: location,
+                    title: nombre
+                  });
+                  // Popup (tooltip) al hacer clic
+                  const infoWindow = new google.maps.InfoWindow({
+                    content: `<strong>${nombre}</strong><br>${direccion}<br>📞 ${telefono}`
+                  });
+                  marker.addListener("click", function() {
+                    infoWindow.open(map, marker);
+                  });
+                  // Guardamos latLng para ajustar bounds luego
+                  addressesParaBounds.push(location);
+                  // Una vez todos los geocodings se hayan procesado (aprox.), ajustamos la vista
+                  if (addressesParaBounds.length === data.length) {
+                    ajustarBounds(addressesParaBounds);
+                  }
+                } else {
+                  console.warn("Geocoding falló para:", direccion, "Status:", status);
+                }
+              });
+            }
           });
         },
-        error: function (err) {
-          console.error("Error al cargar el CSV:", err);
+        error: function(err) {
+          console.error("Error al cargar CSV:", err);
           const tbody = document.querySelector("#lista-proveedores tbody");
           const tr = document.createElement("tr");
-          tr.innerHTML = '<td colspan="3" style="text-align:center;">Error al cargar datos.</td>';
+          tr.innerHTML = '<td colspan="4" style="text-align:center;">Error al cargar datos.</td>';
           tbody.appendChild(tr);
         }
       });
-    });
+    }
+
+    // 6.5 Ajustar los límites del mapa según los marcadores
+    function ajustarBounds(locationsArray) {
+      if (!locationsArray || locationsArray.length === 0) return;
+      const bounds = new google.maps.LatLngBounds();
+      locationsArray.forEach(loc => bounds.extend(loc));
+      map.fitBounds(bounds);
+    }
   </script>
 </body>
 </html>
