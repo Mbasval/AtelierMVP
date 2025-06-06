@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>MVP: Listado de Proveedores</title>
+
+  <!-- 1) Cargamos PapaParse (para parsear CSV) -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <!-- 2) Estilos básicos -->
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    #lista-proveedores {
+      max-width: 600px;
+      margin: 0 auto;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    #lista-proveedores th,
+    #lista-proveedores td {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    #lista-proveedores th {
+      background: #f7f7f7;
+    }
+    /* Fila alterna */
+    #lista-proveedores tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Listado de Proveedores (MVP)</h1>
+  <table id="lista-proveedores">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Servicios</th>
+        <th>Teléfono</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Aquí se inyectarán las filas desde JavaScript -->
+    </tbody>
+  </table>
+
+  <!-- 3) Script para leer el CSV y poblar la tabla -->
+  <script>
+    // ─── 3.1: Reemplaza con la URL CSV que obtuviste en "Publicar en la web" ───
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/TU_SHEET_ID/gviz/tq?tqx=out:csv&sheet=Sheet1";
+
+    // Función que se ejecuta al cargar la página
+    document.addEventListener("DOMContentLoaded", function () {
+      // Usamos PapaParse para descargar y parsear el CSV
+      Papa.parse(CSV_URL, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function (results) {
+          const data = results.data; // Array de objetos: { Nombre: "...", Servicios: "...", "Número de teléfono": "..." }
+          const tbody = document.querySelector("#lista-proveedores tbody");
+          
+          // Si no hay datos, mostramos un mensaje
+          if (!data || data.length === 0) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = '<td colspan="3" style="text-align:center;">No se encontraron proveedores.</td>';
+            tbody.appendChild(tr);
+            return;
+          }
+
+          // Iteramos cada fila y generamos un <tr> con <td> para cada columna
+          data.forEach(row => {
+            const nombre = row["Nombre"] || "";
+            const servicios = row["Servicios"] || "";
+            const telefono = row["Número de teléfono"] || "";
+
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${nombre}</td>
+              <td>${servicios}</td>
+              <td>${telefono}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        },
+        error: function (err) {
+          console.error("Error al cargar el CSV:", err);
+          const tbody = document.querySelector("#lista-proveedores tbody");
+          const tr = document.createElement("tr");
+          tr.innerHTML = '<td colspan="3" style="text-align:center;">Error al cargar datos.</td>';
+          tbody.appendChild(tr);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
