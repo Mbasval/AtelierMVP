@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>MVP: Listado + Mapa con Leaflet (OSM)</title>
+  <title>MVP: Listado + Mapa con Leaflet (Lat/Lon desde Sheet)</title>
 
   <!-- 1) Estilos básicos -->
   <style>
@@ -58,7 +58,7 @@
 </head>
 <body>
 
-  <h1>Vendedores – MVP con Leaflet (OSM)</h1>
+  <h1>Vendedores – MVP con Leaflet (Sin geocoding)</h1>
 
   <!-- 4) Contenedor para el mapa -->
   <div id="map"></div>
@@ -70,7 +70,8 @@
         <th>Nombre</th>
         <th>Servicios</th>
         <th>Teléfono</th>
-        <th>Dirección</th>
+        <th>Latitud</th>
+        <th>Longitud</th>
       </tr>
     </thead>
     <tbody>
@@ -82,7 +83,7 @@
   <script>
     // 6.1: Reemplaza con tu URL CSV pública de Google Sheet
     const CSV_URL =
-      "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1g0UNi055ZvOL-_wi7MJUU6RMzzhkEz9ClclHVaZGEky-sf7x7fa7vGUzAScKgy3qhbBXM2bOpMBi/pub?output=csv";
+      "https://docs.google.com/spreadsheets/d/TU_SHEET_ID/gviz/tq?tqx=out:csv&sheet=Hoja1";
 
     // 6.2: Inicializa Leaflet
     const map = L.map("map").setView([23.6345, -102.5528], 4);
@@ -90,99 +91,65 @@
       attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
     }).addTo(map);
 
-    // 6.3: Geocodificar dirección con Nominatim (OpenStreetMap)
-    function geocodeOSM(address, callback) {
-      // URL de Nominatim para geocoding
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-        address
-      )}`;
-      fetch(url)
-        .then(response => response.json())
-        .then(data => {
-          if (data && data.length > 0) {
-            const lat = parseFloat(data[0].lat);
-            const lon = parseFloat(data[0].lon);
-            callback(null, [lat, lon]);
-          } else {
-            callback("No se encontró ubicación", null);
-          }
-        })
-        .catch(err => callback(err, null));
-    }
-
-    // 6.4: Cargar y procesar el CSV con PapaParse
+    // 6.3: Cargar el CSV y procesar filas
     Papa.parse(CSV_URL, {
       download: true,
       header: true,
       skipEmptyLines: true,
       complete: function (results) {
-        const data = results.data; // Array de { Nombre, Servicios, "Teléfono", Dirección }
+        const data = results.data; // Array de { Nombre, Servicios, "Teléfono", Latitud, Longitud }
         const tbody = document.querySelector("#lista-proveedores tbody");
 
         if (!data || data.length === 0) {
           const tr = document.createElement("tr");
           tr.innerHTML =
-            '<td colspan="4" style="text-align:center;">No se encontraron vendedores.</td>';
+            '<td colspan="5" style="text-align:center;">No se encontraron vendedores.</td>';
           tbody.appendChild(tr);
           return;
         }
 
-        // Array para guardar coordenadas y ajustar bounds luego
-        let marcadoresCount = 0;
         const ubicaciones = [];
 
-        data.forEach((row, index) => {
+        data.forEach((row) => {
           const nombre = row["Nombre"] || "";
           const servicios = row["Servicios"] || "";
           const telefono = row["Teléfono"] || "";
-          const direccion = row["Dirección"] || "";
+          const lat = parseFloat(row["Latitud"]);
+          const lon = parseFloat(row["Longitud"]);
 
-          // 6.4.1: Agregar fila a la tabla
+          // 6.3.1: Agregar fila a la tabla
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${nombre}</td>
             <td>${servicios}</td>
             <td>${telefono}</td>
-            <td>${direccion}</td>
+            <td>${isNaN(lat) ? "" : lat.toFixed(6)}</td>
+            <td>${isNaN(lon) ? "" : lon.toFixed(6)}</td>
           `;
           tbody.appendChild(tr);
 
-          // 6.4.2: Geocodificar con Nominatim y crear marcador
-          if (direccion.trim().length > 0) {
-            geocodeOSM(direccion, (err, latlon) => {
-              marcadoresCount++;
-              if (!err && latlon) {
-                const [lat, lon] = latlon;
-                const marker = L.marker([lat, lon]).addTo(map);
-                marker.bindPopup(`<strong>${nombre}</strong><br>${direccion}<br>📞 ${telefono}`);
-                ubicaciones.push([lat, lon]);
-              } else {
-                console.warn(`No se pudo geocodificar “${direccion}”:`, err);
-              }
-              // Una vez que intentamos geocodificar todas las filas, ajustamos bounds
-              if (marcadoresCount === data.length) {
-                if (ubicaciones.length > 0) {
-                  const bounds = L.latLngBounds(ubicaciones);
-                  map.fitBounds(bounds.pad(0.2));
-                }
-              }
-            });
-          } else {
-            // Si no hay dirección, contamos como “procesado” para el ajuste de bounds
-            marcadoresCount++;
-            if (marcadoresCount === data.length && ubicaciones.length > 0) {
-              const bounds = L.latLngBounds(ubicaciones);
-              map.fitBounds(bounds.pad(0.2));
-            }
+          // 6.3.2: Solo si lat/lon son números válidos, colocamos marcador
+          if (!isNaN(lat) && !isNaN(lon)) {
+            const marker = L.marker([lat, lon]).addTo(map);
+            marker.bindPopup(
+              `<strong>${nombre}</strong><br>Servicios: ${servicios}<br>📞 ${telefono}`
+            );
+            ubicaciones.push([lat, lon]);
           }
         });
+
+        // 6.4: Ajustar los límites del mapa si tenemos ubicaciones
+        if (ubicaciones.length > 0) {
+          const bounds = L.latLngBounds(ubicaciones);
+          map.fitBounds(bounds.pad(0.2));
+        }
       },
       error: function (err) {
         console.error("Error al cargar CSV:", err);
         const tbody = document.querySelector("#lista-proveedores tbody");
         const tr = document.createElement("tr");
         tr.innerHTML =
-          '<td colspan="4" style="text-align:center;">Error al cargar datos.</td>';
+          '<td colspan="5" style="text-align:center;">Error al cargar datos.</td>';
         tbody.appendChild(tr);
       },
     });
