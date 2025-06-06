@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <title>MVP: Listado de Proveedores</title>
 
-  <!-- 1) Cargamos PapaParse (para parsear CSV) -->
+  <!-- 1) PapaParse load CSV -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
-  <!-- 2) Estilos básicos -->
+  <!-- 2) Estilos -->
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -83,7 +83,7 @@
           data.forEach(row => {
             const nombre = row["Nombre"] || "";
             const servicios = row["Servicios"] || "";
-            const telefono = row["Número de teléfono"] || "";
+            const telefono = row["Teléfono"] || "";
 
             const tr = document.createElement("tr");
             tr.innerHTML = `
